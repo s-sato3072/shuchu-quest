@@ -1,0 +1,16 @@
+{
+  "name": "集中クエスト",
+  "short_name": "集中クエスト",
+  "description": "集中した時間が、そのまま冒険の時間になります。",
+  "lang": "ja",
+  "start_url": "./shuchu_quest.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1c2233",
+  "theme_color": "#1c2233",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
