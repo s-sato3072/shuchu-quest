@@ -146,6 +146,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
   <canvas id="scene" width="360" height="150"></canvas>
   <div class="row" style="margin:8px 0 4px"><span class="sub" style="width:34px">体力</span><div class="bar hp grow"><i id="f-hp"></i></div><span class="sub" id="f-hpn" style="width:64px;text-align:right"></span></div>
   <div class="paper" id="f-log"></div>
+  <div class="sub" id="f-work" style="margin-top:6px"></div>
   <div class="row" style="margin-top:12px">
     <button class="grow" id="btn-pip">小窓で表示</button>
     <button class="grow" id="btn-wake">画面点灯を維持</button>
@@ -158,6 +159,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
 <section class="screen nobar" id="scr-result">
   <canvas id="scene3" width="360" height="150"></canvas>
   <div class="center big" id="r-title" style="margin-top:8px"></div>
+  <div class="center" id="r-last" style="font-size:14px;color:#ffe3a3;margin-top:4px"></div>
   <div class="center sub" id="r-sub"></div>
   <div class="card">
     <div class="stats"><div><b id="r-min"></b><span>集中した分</span></div><div><b id="r-kill"></b><span>倒した敵</span></div><div><b id="r-gold"></b><span>獲得G</span></div></div>
@@ -200,11 +202,14 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
 
 <!-- 強化 -->
 <section class="screen" id="scr-shop">
-  <h1>鍛錬</h1>
-  <div class="sub">戦利品を売って得たゴールドで、ヒーローの素の力を鍛えます。</div>
-  <div class="card"><div class="row"><span class="grow">所持ゴールド</span><b id="s-gold" style="font-size:20px"></b></div></div>
+  <h1>拠点</h1>
+  <div class="sub">ゴールドと建材（宝箱・ボスから。ゴールドでも買えます）で施設を建てます。工事は放置でも少しずつ進み、<b>集中中は30倍の速さ</b>で進みます。</div>
+  <div class="card"><div class="row"><span class="grow">所持ゴールド</span><b id="s-gold" style="font-size:20px"></b></div>
+    <div class="row" style="margin-top:4px"><span class="grow">建材</span><b id="s-mat" style="font-size:20px"></b><button class="sm" id="btn-buymat" style="margin-left:8px"></button></div>
+    <div class="row" style="margin-top:4px"><span class="grow">工事枠</span><b id="s-slots"></b></div></div>
   <div class="card" id="s-list"></div>
   <div class="sub">集中の力：集中した合計時間1時間ごとに攻撃+1、防御+1、体力+5が加わります（<span id="s-focus"></span>）。</div>
+  <div class="sub" style="margin-top:6px">工事枠の追加：称号「深淵の踏破者」で2枠目が開きます（アプリ版では購入でも解放予定）。</div>
 </section>
 
 <!-- 記録 -->
@@ -245,7 +250,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
     ブラウザの制約で、画面を消したりアプリを切り替えたりすると、タイマーの終了通知は届かない場合があります（小窓を出している間は届きやすくなります）。集中時間はスマホの時計で計算しているので、あとから戻ってきても冒険の結果は正しく反映されます。心配な場合はスマホ標準のタイマーも併用してください。
   </div>
   <div class="card"><button class="warn" id="btn-reset" style="width:100%">セーブデータを消す</button></div>
-  <div class="sub center">集中クエスト v16</div>
+  <div class="sub center">集中クエスト v18</div>
 </section>
 
 </div>
@@ -253,7 +258,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
   <button data-tab="home" class="on"><b>⚔</b>冒険</button>
   <button data-tab="tasks"><b>✎</b>課題</button>
   <button data-tab="equip"><b>🛡</b>装備</button>
-  <button data-tab="shop"><b>🔨</b>鍛錬</button>
+  <button data-tab="shop"><b>🏰</b>拠点</button>
   <button data-tab="stats"><b>▤</b>記録</button>
   <button data-tab="settings"><b>⚙</b>設定</button>
 </div></nav>
@@ -299,9 +304,11 @@ const SET_BONUS=30;
 function heroBonus(st){
   const b={heal:0,luck:0,gold:0,xp:0,set:null};const subs=[];
   for(const k of ['weapon','armor','charm']){const it=itemById(st,st.hero.equip[k]);if(it&&it.sub){b[it.sub]+=it.sv||0;subs.push(it.sub);}}
-  if(subs.length===3&&subs[0]===subs[1]&&subs[1]===subs[2]){b.set=subs[0];b[subs[0]]+=SET_BONUS;}
+  if(subs.length===3&&subs[0]===subs[1]&&subs[1]===subs[2]){b.set=subs[0];b[subs[0]]+=setBonus(st);}
+  b.gold+=((st.fac&&st.fac.market)||0)*10;// 市場：獲得ゴールド+10%/段
   return b;
 }
+function setBonus(st){return SET_BONUS+((st.fac&&st.fac.shrine)||0)*10;}// 祠：三揃え+10%/段
 function subDesc(it){return it.sub?(SUBS[it.sub].n+'+'+it.sv+'%'):'';}
 
 // 深層（魔城より先）のボス。8体を順に巡り、2周目以降は名前にⅡ・Ⅲ…を付ける
@@ -345,13 +352,14 @@ function earnedTitles(st){return TITLES.filter(t=>t.c(st));}
 function topTitle(st){const e=earnedTitles(st);return e.length?e.reduce((a,b)=>b.r>a.r?b:a):null;}
 // まだ知らせていない称号を返し、知らせた印を付ける
 function newTitles(st){if(!st.titlesSeen)st.titlesSeen=[];const n=earnedTitles(st).filter(t=>st.titlesSeen.indexOf(t.id)<0);n.forEach(t=>st.titlesSeen.push(t.id));return n;}
-function newState(){return {v:1,hero:{lv:1,xp:0,equip:{weapon:null,armor:null,charm:null}},inv:[],gold:0,totalMin:0,sessions:0,bestDepth:0,up:{atk:0,def:0,hp:0},rec:{kills:0,items:0,bosses:0,aborts:0},titlesSeen:[],session:null,breakEnd:0,breakStart:0,breakMin:0,cycle:0,nextId:1,lastStage:0,lastDur:0,tasks:[],groups:['仕事','個人'],curTask:null,days:{},settings:{sfx:false,wake:false,pip:true,pipMode:'compact',hero:0,focusMin:25,shortBreak:5,longBreak:15,longEvery:3,sprSet:3}};}
+function newState(){return {v:1,hero:{lv:1,xp:0,equip:{weapon:null,armor:null,charm:null}},inv:[],gold:0,totalMin:0,sessions:0,bestDepth:0,up:{atk:0,def:0,hp:0},fac:{smith:0,train:0,inn:0,market:0,shrine:0},mat:0,work:{jobs:[],at:0},unlock:{},rec:{kills:0,items:0,bosses:0,aborts:0},titlesSeen:[],session:null,breakEnd:0,breakStart:0,breakMin:0,cycle:0,nextId:1,lastStage:0,lastDur:0,tasks:[],groups:['仕事','個人'],curTask:null,days:{},settings:{sfx:false,wake:false,pip:true,pipMode:'compact',hero:0,focusMin:25,shortBreak:5,longBreak:15,longEvery:3,sprSet:3}};}
 function xpNeed(lv){return Math.round(30*Math.pow(lv,1.6));}
 function focusHours(st){return Math.floor(st.totalMin/60);}
 function itemById(st,id){if(id==null)return null;return st.inv.find(i=>i.id===id)||null;}
 function heroStats(st){
   const h=st.hero,fh=focusHours(st);
-  let atk=7+h.lv+st.up.atk*2+fh, def=3+Math.floor(h.lv/2)+st.up.def*2+fh, hp=80+h.lv*6+st.up.hp*12+fh*5;
+  const f=st.fac||{};
+  let atk=7+h.lv+(f.smith||0)*6+fh, def=3+Math.floor(h.lv/2)+(f.train||0)*5+fh, hp=80+h.lv*6+(f.inn||0)*50+fh*5;
   for(const k of ['weapon','armor','charm']){const it=itemById(st,h.equip[k]);if(it){atk+=it.atk||0;def+=it.def||0;hp+=it.hp||0;}}
   return {atk,def,hp};
 }
@@ -363,14 +371,22 @@ function makeEnemy(r,k,boss){
   return {name:info.enemies[i].n,boss:false,shape:i,hp:Math.round(b*3*v),atk:Math.round(b*0.4*v),def:Math.round(b*0.3),xp:Math.round(b*1.2),gold:Math.round(b*0.6)};
 }
 function battle(r,hero,hp,e){
-  const hd=Math.max(1,hero.atk-e.def*0.5), ed=Math.max(1,e.atk-hero.def*0.6);
+  // v17: ダメージの下限（主人公は攻撃の15%、敵は攻撃の5%）。防御で完全無効化されると「満タンのまま突然ボスに即死」という崖ができるため
+  const hd=Math.max(hero.atk*0.15,hero.atk-e.def*0.5), ed=Math.max(e.atk*0.05,e.atk-hero.def*0.6);
   let ehp=e.hp,rounds=0;
   while(rounds<60){
     rounds++;
-    ehp-=hd*(0.85+r()*0.3); if(ehp<=0)return {win:true,hp,rounds};
-    hp-=ed*(0.85+r()*0.3); if(hp<=0)return {win:false,hp:0,rounds};
+    ehp-=hd*(0.85+r()*0.3); if(ehp<=0)return {win:true,hp,rounds,left:0};
+    hp-=ed*(0.85+r()*0.3); if(hp<=0)return {win:false,hp:0,rounds,left:ehp};
   }
-  return {win:false,hp,rounds};
+  // 60ラウンドで決着せず：倒しきれなかっただけで、力尽きてはいない
+  return {win:false,hp,rounds,left:ehp,timeout:true};
+}
+// ボス勝率の目安：現在の能力で40回戦わせる（seedは固定なので同じ能力なら同じ値）
+function bossOdds(st,k){
+  const hero=heroStats(st);let win=0;
+  for(let i=0;i<40;i++){const r=rng(k*1000+i+1);const e=makeEnemy(r,k,true);if(battle(r,hero,hero.hp,e).win)win++;}
+  return win/40;
 }
 function makeItem(r,k,minIdx,durMin){
   const kinds=['weapon','armor','charm'],kind=kinds[Math.floor(r()*3)];
@@ -434,13 +450,15 @@ function simulate(session){
   const r=rng(session.seed),k=session.stage,D=session.durMin,hero=session.snap;
   // 副効果（出発時の snap.b。無い旧セッションは0）
   const B=hero.b||{heal:0,luck:0,gold:0,xp:0};const gm=g=>Math.round(g*(1+B.gold/100)),xm=x=>Math.round(x*(1+B.xp/100)),lm=p=>Math.min(0.95,p*(1+B.luck/100));
-  let hp=hero.hp;const ev=[],loot=[];let xp=0,gold=0,kills=0,dead=false,cleared=false;
+  let hp=hero.hp;const ev=[],loot=[];let xp=0,gold=0,kills=0,dead=false,cleared=false,mat=0;
   for(let m=0;m<D;m++){
     if(dead){ev.push({m,type:'home',hp,text:'ふらふらと帰り道を歩いている……'});continue;}
     if(m===D-1){
       const e=makeEnemy(r,k,true),b=battle(r,hero,hp,e);hp=b.hp;
-      if(b.win){cleared=true;kills++;xp+=xm(e.xp);gold+=gm(e.gold);ev.push({m,type:'boss',win:true,enemy:e,hp,text:'ボス「'+e.name+'」を打ち倒した！'});}
-      else{dead=true;ev.push({m,type:'boss',win:false,enemy:e,hp,text:'ボス「'+e.name+'」に敗れた……'});}
+      if(b.win){cleared=true;kills++;xp+=xm(e.xp);gold+=gm(e.gold);mat+=3;ev.push({m,type:'boss',win:true,enemy:e,hp,text:'ボス「'+e.name+'」を打ち倒した！ 建材を3つ手に入れた'});}
+      else{const cut=Math.max(0,Math.min(99,Math.round((1-b.left/e.hp)*100)));
+        if(b.timeout){ev.push({m,type:'boss',win:false,enemy:e,hp,cut,text:'ボス「'+e.name+'」を倒しきれず、体力を'+cut+'%削ったところで引き分けた'});}
+        else{dead=true;ev.push({m,type:'boss',win:false,enemy:e,hp,cut,text:'ボス「'+e.name+'」に敗れた……（体力を'+cut+'%削った）'});}}
       continue;
     }
     const x=r();
@@ -449,22 +467,25 @@ function simulate(session){
       if(b.win){kills++;xp+=xm(e.xp);gold+=gm(e.gold);let t=e.name+'を倒した';
         if(r()<lm(0.3)){const it=makeItem(r,k,m,D);loot.push(it);t+='。'+it.name+'を拾った！';}
         ev.push({m,type:'battle',win:true,enemy:e,hp,text:t});}
+      else if(b.timeout){ev.push({m,type:'battle',win:false,enemy:e,hp,text:e.name+'に手こずり、取り逃がした'});}
       else{dead=true;ev.push({m,type:'battle',win:false,enemy:e,hp,text:e.name+'に敗れ、力尽きて逃げ帰った……'});}
     }else if(x<0.70){
       if(r()<lm(0.7)){const it=makeItem(r,k,m,D);loot.push(it);ev.push({m,type:'chest',hp,text:'宝箱を見つけた！ '+it.name+'を手に入れた'});}
-      else{const g=gm(Math.round(enemyBase(k)*(2+r()*3)));gold+=g;ev.push({m,type:'chest',hp,text:'宝箱から '+g+'G を見つけた'});}
+      else{const g=gm(Math.round(enemyBase(k)*(2+r()*3)));gold+=g;const mt=1+Math.floor(r()*2);mat+=mt;ev.push({m,type:'chest',hp,text:'宝箱から '+g+'G と建材'+mt+'つを見つけた'});}
     }else if(x<0.85){
       const heal=Math.round(hero.hp*0.35*(1+B.heal/100));hp=Math.min(hero.hp,hp+heal);ev.push({m,type:'rest',hp,text:'泉で休んだ（体力+'+heal+'）'});
     }else{
       ev.push({m,type:'walk',hp,text:SCENERY[Math.floor(r()*SCENERY.length)]});
     }
   }
-  return {events:ev,loot,xp,gold,kills,dead,cleared};
+  return {events:ev,loot,xp,gold,kills,dead,cleared,mat};
 }
 // 帰還時の反映。now は帰還時刻（日別記録の日付に使う）
 function applyResult(st,res,now){
   const s=st.session;
-  st.totalMin+=s.durMin;st.sessions++;st.cycle=(st.cycle||0)+1;st.gold+=res.gold;st.rec.kills+=res.kills;st.rec.items+=res.loot.length;
+  st.totalMin+=s.durMin;st.sessions++;st.cycle=(st.cycle||0)+1;st.gold+=res.gold;st.mat=(st.mat||0)+(res.mat||0);st.rec.kills+=res.kills;st.rec.items+=res.loot.length;
+  // 工事：放置ぶんを精算してから、集中ぶん（1分＝WORK_FOCUS工程。放置の1はすでに含むので-1）を上乗せ
+  const end0=now==null?s.start+s.durMin*60000:now;const built=advanceWork(st,end0).concat(addWork(st,(WORK_FOCUS-1)*s.durMin));
   if(res.cleared){st.rec.bosses++;st.bestDepth=Math.max(st.bestDepth,s.stage+1);}
   const lvFrom=st.hero.lv;st.hero.xp+=res.xp;
   while(st.hero.xp>=xpNeed(st.hero.lv)){st.hero.xp-=xpNeed(st.hero.lv);st.hero.lv++;}
@@ -475,7 +496,7 @@ function applyResult(st,res,now){
   if(s.task!=null){task=taskById(st,s.task);if(task){task.min+=s.durMin;d.tasks[task.id]=(d.tasks[task.id]||0)+s.durMin;}}
   pruneDays(st);
   st.session=null;
-  return {lvFrom,lvTo:st.hero.lv,added,task};
+  return {lvFrom,lvTo:st.hero.lv,added,task,built,work:WORK_FOCUS*s.durMin};
 }
 function abortSession(st){st.rec.aborts++;st.session=null;}
 function equip(st,id){const it=itemById(st,id);if(!it)return false;st.hero.equip[it.kind]=id;return true;}
@@ -497,13 +518,39 @@ function sellWeak(st){
   }
   return {total,n};
 }
-function upgradeCost(n){return Math.round(40*Math.pow(1.5,n));}
-function buyUpgrade(st,key){const c=upgradeCost(st.up[key]);if(st.gold<c)return false;st.gold-=c;st.up[key]++;return true;}
+// ===== 拠点の施設（v18）=====
+// 工事は「工程」で数える。放置1分＝1工程、集中1分＝WORK_FOCUS工程（集中が主エンジン、放置は補助）
+const WORK_FOCUS=30;
+const FACS=[
+ {id:'smith', n:'鍛冶場', max:5, per:'攻撃+6', eff:lv=>'攻撃+'+lv*6,  work:[300,900,1800,3600,7200], gold:[100,400,1500,5000,15000], mat:[2,4,8,15,25]},
+ {id:'train', n:'訓練所', max:5, per:'防御+5', eff:lv=>'防御+'+lv*5,  work:[300,900,1800,3600,7200], gold:[100,400,1500,5000,15000], mat:[2,4,8,15,25]},
+ {id:'inn',   n:'宿屋',   max:5, per:'体力+50',eff:lv=>'体力+'+lv*50, work:[300,900,1800,3600,7200], gold:[100,400,1500,5000,15000], mat:[2,4,8,15,25]},
+ {id:'market',n:'市場',   max:3, per:'獲得ゴールド+10%',eff:lv=>'獲得ゴールド+'+lv*10+'%', work:[600,1800,5400], gold:[500,2500,10000], mat:[3,8,20]},
+ {id:'shrine',n:'祠',     max:3, per:'三揃え+10%',eff:lv=>'三揃え+'+lv*10+'%', work:[600,1800,5400], gold:[500,2500,10000], mat:[3,8,20]},
+];
+function facDef(id){return FACS.find(f=>f.id===id);}
+// 工事枠：1枠＋称号「深淵の踏破者」または購入で2枠目＋購入で3枠目。購入はアプリ殻（Kotlin）から ShuchuBridge.unlock() で立てる旗
+function slotCount(st){const u=st.unlock||{};let n=1;if(u.slot2||(st.titlesSeen||[]).includes('d17')||TITLES.find(t=>t.id==='d17').c(st))n++;if(u.slot3)n++;return n;}
+function matPrice(st){return Math.round(80*Math.pow(1.05,st.matBought||0));}
+function buyMat(st){const p=matPrice(st);if(st.gold<p)return false;st.gold-=p;st.mat=(st.mat||0)+1;st.matBought=(st.matBought||0)+1;return true;}
+function jobOf(st,id){return (st.work.jobs||[]).find(j=>j.fac===id)||null;}
+function canStart(st,id){const f=facDef(id),lv=st.fac[id]||0;if(!f||lv>=f.max||jobOf(st,id))return {ok:false,why:'不可'};
+  if(st.work.jobs.length>=slotCount(st))return {ok:false,why:'工事枠が空いていません'};
+  if(st.gold<f.gold[lv])return {ok:false,why:'ゴールド不足'};if((st.mat||0)<f.mat[lv])return {ok:false,why:'建材不足'};return {ok:true};}
+function startJob(st,id,now){const c=canStart(st,id);if(!c.ok)return false;const f=facDef(id),lv=st.fac[id]||0;
+  advanceWork(st,now);st.gold-=f.gold[lv];st.mat-=f.mat[lv];st.work.jobs.push({fac:id,to:lv+1,need:f.work[lv],done:0});return true;}
+// 時間経過ぶんの工程を加算（放置1分＝1）。完成した工事は段階に反映して返す
+function advanceWork(st,now){const w=st.work;if(!w.at){w.at=now;return [];}
+  const min=Math.max(0,Math.floor((now-w.at)/60000));if(min>0){w.at+=min*60000;return addWork(st,min);}return [];}
+function addWork(st,pts){const done=[];for(const j of st.work.jobs)j.done+=pts;
+  st.work.jobs=st.work.jobs.filter(j=>{if(j.done>=j.need){st.fac[j.fac]=j.to;done.push(j);return false;}return true;});return done;}
+// 表示用：残り工程を放置なら何分、集中なら何分か
+function jobRemain(j){const left=Math.max(0,j.need-j.done);return {left,idleMin:left,focusMin:Math.ceil(left/WORK_FOCUS)};}
 function compareEquip(st,it){const cur=itemById(st,st.hero.equip[it.kind]);return itemMain(it)-itemMain(cur);}
 function stepSetting(st,key,dir){const L=LIMITS[key];if(!L)return;const v=(st.settings[key]||L[0])+dir*L[2];st.settings[key]=Math.max(L[0],Math.min(L[1],v));}
 function durationList(st){const l=DURATIONS.slice();const f=st.settings.focusMin||25;if(l.indexOf(f)<0){l.push(f);l.sort((a,b)=>a-b);}return l;}
 
-return {SAVE_KEY,FREE_CANCEL_MIN,DURATIONS,LIMITS,STAGES,DEEP_BOSSES,TITLES,SUBS,SET_BONUS,heroBonus,subDesc,earnedTitles,topTitle,newTitles,RARITY,KIND_LABEL,stageInfo,newState,xpNeed,focusHours,itemById,heroStats,enemyBase,makeEnemy,battle,makeItem,itemMain,itemPrice,itemDesc,startSession,elapsedMin,remainMs,simulate,applyResult,abortSession,equip,unequip,isEquipped,sell,sellWeak,upgradeCost,buyUpgrade,compareEquip,rng,
+return {SAVE_KEY,FREE_CANCEL_MIN,DURATIONS,LIMITS,STAGES,DEEP_BOSSES,TITLES,SUBS,SET_BONUS,heroBonus,subDesc,bossOdds,earnedTitles,topTitle,newTitles,RARITY,KIND_LABEL,stageInfo,newState,xpNeed,focusHours,itemById,heroStats,enemyBase,makeEnemy,battle,makeItem,FACS,WORK_FOCUS,facDef,slotCount,matPrice,buyMat,jobOf,canStart,startJob,advanceWork,jobRemain,setBonus,itemMain,itemPrice,itemDesc,startSession,elapsedMin,remainMs,simulate,applyResult,abortSession,equip,unequip,isEquipped,sell,sellWeak,compareEquip,rng,
   dayKey,dayOf,dayKeys,periodStats,pruneDays,taskAdd,taskById,taskDone,taskUndo,taskDel,groupDel,openTasks,groupMin,nextBreakMin,startBreak,endBreak,stepSetting,durationList};
 })();
 if(typeof module!=='undefined'&&module.exports){module.exports=Core;}
@@ -520,6 +567,10 @@ let st=load(),simCache=null,tick=null,btick=null,wakeLock=null,cur='home',selSta
 function load(){try{const raw=localStorage.getItem(C.SAVE_KEY);if(raw){const o=JSON.parse(raw);const base=C.newState();
   // v11で主人公は2人（紫のポニーテール／白髪の着物）。旧セーブは白髪（sprSet=2でhero=3）だけ引き継ぎ、それ以外は紫に寄せる
   if(o.settings&&o.settings.sprSet!==3){o.settings.hero=(o.settings.sprSet===2&&o.settings.hero===3)?1:0;o.settings.sprSet=3;}
+  // v18: 旧「鍛錬」（1回+2）を施設の段階（1段+3）に換算して引き継ぐ。換算しきれない余りはゴールドで返す
+  o.fac=Object.assign({},base.fac,o.fac||{});o.work=o.work&&o.work.jobs?o.work:{jobs:[],at:0};o.unlock=o.unlock||{};o.mat=o.mat||0;
+  if(o.up&&(o.up.atk||o.up.def||o.up.hp)){const conv=(n,id,max)=>{const lv=Math.min(max,Math.round(n*2/3));o.fac[id]=Math.max(o.fac[id]||0,lv);let rest=0;for(let i=Math.round(lv*1.5);i<n;i++)rest+=Math.round(40*Math.pow(1.5,i));return rest;};
+    let back=conv(o.up.atk||0,'smith',5)+conv(o.up.def||0,'train',5)+conv(o.up.hp||0,'inn',5);o.gold=(o.gold||0)+back;o.up={atk:0,def:0,hp:0};}
   return Object.assign(base,o,{settings:Object.assign(base.settings,o.settings||{}),rec:Object.assign(base.rec,o.rec||{}),days:o.days||{},tasks:o.tasks||[],groups:o.groups||base.groups});}}catch(e){}return C.newState();}
 function save(){try{localStorage.setItem(C.SAVE_KEY,JSON.stringify(st));}catch(e){}}
 function now(){return Date.now();}
@@ -571,7 +622,8 @@ function renderHome(){
   const sc=$('#stage-chips');sc.innerHTML='';
   for(let k=0;k<=maxStage;k++){const b=document.createElement('button');b.className='chip'+(k===selStage?' on':'');b.textContent=C.stageInfo(k).name;b.onclick=()=>{selStage=k;renderHome();};sc.appendChild(b);}
   const lock=document.createElement('button');lock.className='chip';lock.disabled=true;lock.textContent='🔒 '+C.stageInfo(maxStage+1).name;sc.appendChild(lock);
-  $('#stage-note').textContent=selStage<maxStage?'クリア済み。次の場所を開くには先の場所のボスを倒してください。':'最後の1分に現れるボスを倒すと、次の場所が開きます。';
+  {const p=C.bossOdds(st,selStage);const lab=p>=0.8?'高い':p>=0.5?'五分':p>=0.2?'低い':'ほぼ勝てない';
+   $('#stage-note').textContent=(selStage<maxStage?'クリア済み。':'最後の1分に現れるボスを倒すと、次の場所が開きます。')+' ボス「'+C.stageInfo(selStage).boss.n+'」に勝てる見込み：'+lab+(p<0.5?'（装備と拠点の強化で上げられます）':'');}
   const dc=$('#dur-chips');dc.innerHTML='';
   const list=C.durationList(st);if(list.indexOf(selDur)<0)selDur=st.settings.focusMin||25;
   list.forEach(d=>{const b=document.createElement('button');b.className='chip'+(d===selDur?' on':'');b.textContent=d+'分';b.onclick=()=>{selDur=d;renderHome();};dc.appendChild(b);});
@@ -617,6 +669,8 @@ function updateFocus(){
   else{log.className='paper';log.innerHTML=seen.slice(-6).map((e,i,a)=>'<p'+(i===a.length-1?' class="now"':'')+'><span class="m">'+(e.m+1)+'分</span>'+esc(e.text)+'</p>').join('');}
   const hpNow=seen.length?seen[seen.length-1].hp:s.snap.hp;
   $('#f-hp').style.width=(100*hpNow/s.snap.hp)+'%';$('#f-hpn').textContent=Math.round(hpNow)+'/'+s.snap.hp;
+  {const jobs=st.work.jobs;if(jobs.length){const parts=jobs.map(j=>{const pct=Math.min(99,Math.floor(100*(j.done+em*C.WORK_FOCUS)/j.need));return C.facDef(j.fac).n+j.to+'段 '+pct+'%';});
+     $('#f-work').textContent='工事（集中中は30倍速）：'+parts.join('　');}else $('#f-work').textContent='';}
   const free=em<C.FREE_CANCEL_MIN;
   $('#btn-abort').textContent=free?'中止':'撤退';
   $('#f-note').textContent=free?'今なら失うものなしで中止できます（出発から3分まで）。':'今撤退すると、この冒険の戦利品と集中時間は記録されません。';
@@ -690,9 +744,13 @@ function stopResultAnim(){clearTimeout(resAnim);resAnim=null;}
 function renderResult(res,ap,stage,dur){
   const info=C.stageInfo(stage);
   $('#r-title').textContent=res.cleared?'ボス撃破！ '+info.name+'を制覇':(res.dead?heroDef().nm+'は力尽きて帰還':heroDef().nm+'は無事に帰還');
+  {const bossEv=res.events.find(e=>e.type==='boss'),lastEv=res.events.find(e=>e.type==='battle'&&!e.win);
+   const line=bossEv?bossEv.text:(lastEv?lastEv.text:'');$('#r-last').textContent=line;$('#r-last').style.display=line?'':'none';}
   $('#r-sub').textContent=res.cleared?(st.bestDepth===stage+1?'次の場所「'+C.stageInfo(stage+1).name+'」が開きました':'制覇済みの場所をもう一度制覇しました'):(res.dead?'それでも集中した時間は無駄になりません':'ボスまでたどり着けませんでした');
   $('#r-min').textContent=dur;$('#r-kill').textContent=res.kills;$('#r-gold').textContent=res.gold;
-  $('#r-lv').innerHTML=ap.lvTo>ap.lvFrom?'<b class="up">レベルアップ！ Lv.'+ap.lvFrom+' → Lv.'+ap.lvTo+'</b>':'経験値 +'+res.xp;
+  $('#r-lv').innerHTML=(ap.lvTo>ap.lvFrom?'<b class="up">レベルアップ！ Lv.'+ap.lvFrom+' → Lv.'+ap.lvTo+'</b>':'経験値 +'+res.xp)
+    +(res.mat?'　建材 +'+res.mat:'')+(ap.work&&st.work.jobs.length+ (ap.built||[]).length?'<div class="sub">工事が '+ap.work+'工程 進んだ</div>':'')
+    +(ap.built||[]).map(j=>'<div class="up">'+esc(C.facDef(j.fac).n)+'が'+j.to+'段に完成！</div>').join('');
   $('#r-task').textContent=ap.task?'課題「'+ap.task.t+'」に '+dur+'分を記録（合計 '+hm(ap.task.min)+'）':'';
   lastAdded=ap.added;renderLoot();
   $('#r-log').innerHTML=res.events.map(e=>'<p><span class="m">'+(e.m+1)+'分</span>'+esc(e.text)+'</p>').join('');
@@ -712,7 +770,7 @@ function itemRow(it,after){
   d.innerHTML='<div class="nm"><span class="'+C.RARITY[it.rar].cls+'">'+esc(it.name)+'</span>'+(eqd?'<span class="eq">装備中</span>':'')+(it.sub?'<span class="tag">'+C.subDesc(it)+'</span>':'')+'<small>'+C.KIND_LABEL[it.kind]+'　'+C.itemDesc(it)+(eqd?'':(diff>0?'　<span class="up">今より+'+diff+'</span>':diff<0?'　<span class="dn">今より'+diff+'</span>':'　今と同じ'))+'　売値 '+C.itemPrice(it)+'G</small></div>';
   const b1=document.createElement('button');b1.className='sm';
   if(eqd){b1.textContent='外す';b1.onclick=()=>{C.unequip(st,it.kind);save();after();};}
-  else{b1.textContent='装備';b1.className='sm'+(diff>0?' pri':'');b1.onclick=()=>{const before=C.heroBonus(st).set;C.equip(st,it.id);save();beep(SND.item);const b=C.heroBonus(st);if(b.set&&b.set!==before)toast('三揃え！ '+C.SUBS[b.set].n+'の力が高まった（+'+C.SET_BONUS+'%）');after();};}
+  else{b1.textContent='装備';b1.className='sm'+(diff>0?' pri':'');b1.onclick=()=>{const before=C.heroBonus(st).set;C.equip(st,it.id);save();beep(SND.item);const b=C.heroBonus(st);if(b.set&&b.set!==before)toast('三揃え！ '+C.SUBS[b.set].n+'の力が高まった（+'+C.setBonus(st)+'%）');after();};}
   d.appendChild(b1);
   if(!eqd){const b2=document.createElement('button');b2.className='sm';b2.textContent='売る';
     b2.onclick=()=>{const p=C.sell(st,it.id);if(!p){toast('装備中の品は売れません');return;}save();beep(SND.coin);toast(p+'G で売りました');after();};
@@ -779,7 +837,7 @@ function renderEquip(){
   for(const k of ['weapon','armor','charm']){const it=C.itemById(st,st.hero.equip[k]);const d=document.createElement('div');d.className='row';d.style.padding='4px 0';
     d.innerHTML='<span class="sub" style="width:60px">'+C.KIND_LABEL[k]+'</span><span class="grow">'+(it?'<span class="'+C.RARITY[it.rar].cls+'">'+esc(it.name)+'</span>'+(it.sub?'<span class="tag">'+C.subDesc(it)+'</span>':'')+' <small class="sub">'+C.itemDesc(it)+'</small>':'<span class="sub">なし</span>')+'</span>';sl.appendChild(d);}
   const b=C.heroBonus(st);const parts=['heal','luck','gold','xp'].filter(k=>b[k]).map(k=>C.SUBS[k].d+'+'+b[k]+'%');
-  $('#e-sub').innerHTML=parts.length?'副効果：'+parts.join('　')+(b.set?'<br><b class="up">三揃え：'+C.SUBS[b.set].n+'（+'+C.SET_BONUS+'%）</b>':''):'<span class="sub">副効果なし（上質・伝説の装備に付くことがあります。同じ副効果を3枠そろえると三揃えで+'+C.SET_BONUS+'%）</span>';
+  $('#e-sub').innerHTML=parts.length?'副効果：'+parts.join('　')+(b.set?'<br><b class="up">三揃え：'+C.SUBS[b.set].n+'（+'+C.setBonus(st)+'%）</b>':''):'<span class="sub">副効果なし（上質・伝説の装備に付くことがあります。同じ副効果を3枠そろえると三揃えで+'+C.setBonus(st)+'%）</span>';
   const inv=$('#e-inv');inv.innerHTML='';$('#e-count').textContent=st.inv.length+'個';
   if(!st.inv.length){inv.innerHTML='<span class="sub">持ち物はありません。冒険で拾ってきましょう。</span>';return;}
   const sorted=st.inv.slice().sort((a,b)=>(a.kind>b.kind?1:a.kind<b.kind?-1:0)||C.itemMain(b)-C.itemMain(a));
@@ -789,14 +847,25 @@ $('#btn-sellweak').onclick=()=>{const r=C.sellWeak(st);save();if(r.n){beep(SND.c
 
 // ---- 鍛錬 ----
 function renderShop(){
-  $('#s-gold').textContent=st.gold+'G';$('#s-focus').textContent='現在 '+C.focusHours(st)+'時間';
-  const L=[['atk','攻撃を鍛える','攻撃+2'],['def','防御を鍛える','防御+2'],['hp','体力を鍛える','体力+12']];
+  const t=now();const built=C.advanceWork(st,t);if(built.length){save();built.forEach(j=>toast(C.facDef(j.fac).n+'が'+j.to+'段に完成！'));}
+  $('#s-gold').textContent=st.gold+'G';$('#s-mat').textContent=(st.mat||0)+'個';$('#s-focus').textContent='現在 '+C.focusHours(st)+'時間';
+  {const p=C.matPrice(st);const b=$('#btn-buymat');b.textContent='1つ買う '+p+'G';b.disabled=st.gold<p;b.onclick=()=>{if(C.buyMat(st)){save();beep(SND.coin);renderShop();}};}
+  const slots=C.slotCount(st);$('#s-slots').textContent=st.work.jobs.length+' / '+slots+(slots<3?'（称号「深淵の踏破者」で2枠目）':'');
   const box=$('#s-list');box.innerHTML='';
-  L.forEach(([k,nm,ef])=>{const c=C.upgradeCost(st.up[k]);const d=document.createElement('div');d.className='item';
-    d.innerHTML='<div class="nm">'+nm+' <small class="sub" style="display:inline">Lv.'+st.up[k]+'</small><small>'+ef+'　費用 '+c+'G</small></div>';
-    const b=document.createElement('button');b.className='sm'+(st.gold>=c?' pri':'');b.disabled=st.gold<c;b.textContent='鍛える';
-    b.onclick=()=>{if(C.buyUpgrade(st,k)){save();beep(SND.lv);toast(nm+'：'+ef);renderShop();}};d.appendChild(b);box.appendChild(d);});
+  C.FACS.forEach(f=>{const lv=st.fac[f.id]||0,j=C.jobOf(st,f.id);const d=document.createElement('div');d.className='item';
+    let sub='';
+    if(j){const r=C.jobRemain(j);const pct=Math.min(99,Math.floor(100*j.done/j.need));
+      sub='<span class="up">工事中 '+j.to+'段 '+pct+'%</span>　残り 集中'+r.focusMin+'分／放置'+fmtMin(r.idleMin)+'<div class="bar" style="margin-top:4px"><i style="width:'+pct+'%"></i></div>';}
+    else if(lv>=f.max)sub='最大段階';
+    else sub='次：'+f.per+'　費用 '+f.gold[lv]+'G・建材'+f.mat[lv]+'　工程'+f.work[lv]+'（集中'+Math.ceil(f.work[lv]/C.WORK_FOCUS)+'分）';
+    d.innerHTML='<div class="nm">'+f.n+' <small class="sub" style="display:inline">'+lv+'/'+f.max+'段</small><small>'+(lv?f.eff(lv):'未建設')+'</small><small>'+sub+'</small></div>';
+    if(!j&&lv<f.max){const c=C.canStart(st,f.id);const b=document.createElement('button');b.className='sm'+(c.ok?' pri':'');b.disabled=!c.ok;b.textContent='着工';b.title=c.why||'';
+      b.onclick=()=>{if(C.startJob(st,f.id,now())){save();beep(SND.lv);toast(f.n+'の工事を始めました');renderShop();}};d.appendChild(b);}
+    box.appendChild(d);});
 }
+function fmtMin(m){return m>=1440?Math.round(m/1440*10)/10+'日':m>=60?Math.round(m/60*10)/10+'時間':m+'分';}
+// アプリ殻（Kotlin WebView）からの解放入口。例：ShuchuBridge.unlock('slot2')
+window.ShuchuBridge={unlock(id){if(!/^slot[23]$/.test(id))return false;st.unlock=st.unlock||{};st.unlock[id]=true;save();if(cur==='shop')renderShop();return true;},has(id){return !!(st.unlock&&st.unlock[id]);}};
 
 // ---- 記録 ----
 document.querySelectorAll('#stat-period .chip').forEach(b=>b.onclick=()=>{statPeriod=Number(b.dataset.p);renderStats();});
@@ -1058,6 +1127,7 @@ window.addEventListener('pageshow',()=>{if(st.session&&cur==='focus')updateFocus
 let pend=0;const onImg=()=>{if(--pend===0){if(cur==='home')drawScene($('#scene2'),null,0,true);}};
 for(const k in IMG){pend++;IMG[k].onload=onImg;}for(const im of BGI){pend++;im.onload=onImg;}
 selStage=Math.min(st.lastStage||0,st.bestDepth);selDur=st.lastDur||st.settings.focusMin||25;
+{const built=C.advanceWork(st,now());if(built.length){save();setTimeout(()=>built.forEach(j=>toast(C.facDef(j.fac).n+'が'+j.to+'段に完成！')),600);}}
 if(st.session){if(C.remainMs(st.session,now())<=0){simCache=C.simulate(st.session);finishSession();}else enterFocus();}
 else{if(st.breakStart&&st.breakEnd&&st.breakEnd<=now()){C.endBreak(st,now());save();}show('home');}
 })();
