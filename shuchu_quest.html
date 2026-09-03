@@ -126,6 +126,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
   </div>
   <h2>取り組む課題</h2>
   <div class="row"><select id="task-sel" class="grow"></select></div>
+  <div class="row" style="margin-top:6px"><input type="text" id="note-in" class="grow" maxlength="40" placeholder="今回やること（一言。任意）"></div>
   <div class="sub" style="margin-top:6px" id="task-note"></div>
   <h2>行き先</h2>
   <div class="chips" id="stage-chips"></div>
@@ -144,7 +145,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
   <div class="center sub" id="f-task" style="margin-bottom:2px"></div>
   <div class="center sub" style="margin-bottom:8px">画面を見なくて大丈夫です。時間になったら戻ってきてください。</div>
   <canvas id="scene" width="360" height="150"></canvas>
-  <div class="row" style="margin:8px 0 4px"><span class="sub" style="width:34px">体力</span><div class="bar hp grow"><i id="f-hp"></i></div><span class="sub" id="f-hpn" style="width:64px;text-align:right"></span></div>
+  <div class="row" id="f-hprow" style="margin:8px 0 4px"><span class="sub" style="width:34px">体力</span><div class="bar hp grow"><i id="f-hp"></i></div><span class="sub" id="f-hpn" style="width:64px;text-align:right"></span></div>
   <div class="paper" id="f-log"></div>
   <div class="sub" id="f-work" style="margin-top:6px"></div>
   <div class="row" style="margin-top:12px">
@@ -238,6 +239,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
   </div>
   <h2>表示と通知</h2>
   <div class="card">
+    <div class="tog"><div>集中中は「しずか」に<br><small class="sub">タイマーと主人公だけを表示。出来事・体力・工事の進みは帰還後にまとめて読みます</small></div><button class="sw" id="sw-quiet"></button></div>
     <div class="tog"><div>効果音<br><small class="sub">レベルアップや帰還時に短く鳴らします</small></div><button class="sw" id="sw-sfx"></button></div>
     <div class="tog"><div>出発時に小窓を出す<br><small class="sub">他のアプリを使っていても残り時間が見えます（Android版Chrome）</small></div><button class="sw" id="sw-pip"></button></div>
     <div class="tog"><div>小窓の表示<br><small class="sub">「時間だけ」は細長い帯になり、邪魔になりにくいです</small></div><div class="chips" id="pip-mode"><button class="chip sm" data-m="compact">時間だけ</button><button class="chip sm" data-m="full">詳しく</button></div></div>
@@ -250,7 +252,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
     ブラウザの制約で、画面を消したりアプリを切り替えたりすると、タイマーの終了通知は届かない場合があります（小窓を出している間は届きやすくなります）。集中時間はスマホの時計で計算しているので、あとから戻ってきても冒険の結果は正しく反映されます。心配な場合はスマホ標準のタイマーも併用してください。
   </div>
   <div class="card"><button class="warn" id="btn-reset" style="width:100%">セーブデータを消す</button></div>
-  <div class="sub center">集中クエスト v18</div>
+  <div class="sub center">集中クエスト v19</div>
 </section>
 
 </div>
@@ -352,7 +354,7 @@ function earnedTitles(st){return TITLES.filter(t=>t.c(st));}
 function topTitle(st){const e=earnedTitles(st);return e.length?e.reduce((a,b)=>b.r>a.r?b:a):null;}
 // まだ知らせていない称号を返し、知らせた印を付ける
 function newTitles(st){if(!st.titlesSeen)st.titlesSeen=[];const n=earnedTitles(st).filter(t=>st.titlesSeen.indexOf(t.id)<0);n.forEach(t=>st.titlesSeen.push(t.id));return n;}
-function newState(){return {v:1,hero:{lv:1,xp:0,equip:{weapon:null,armor:null,charm:null}},inv:[],gold:0,totalMin:0,sessions:0,bestDepth:0,up:{atk:0,def:0,hp:0},fac:{smith:0,train:0,inn:0,market:0,shrine:0},mat:0,work:{jobs:[],at:0},unlock:{},rec:{kills:0,items:0,bosses:0,aborts:0},titlesSeen:[],session:null,breakEnd:0,breakStart:0,breakMin:0,cycle:0,nextId:1,lastStage:0,lastDur:0,tasks:[],groups:['仕事','個人'],curTask:null,days:{},settings:{sfx:false,wake:false,pip:true,pipMode:'compact',hero:0,focusMin:25,shortBreak:5,longBreak:15,longEvery:3,sprSet:3}};}
+function newState(){return {v:1,hero:{lv:1,xp:0,equip:{weapon:null,armor:null,charm:null}},inv:[],gold:0,totalMin:0,sessions:0,bestDepth:0,up:{atk:0,def:0,hp:0},fac:{smith:0,train:0,inn:0,market:0,shrine:0},mat:0,work:{jobs:[],at:0},unlock:{},rec:{kills:0,items:0,bosses:0,aborts:0},titlesSeen:[],session:null,breakEnd:0,breakStart:0,breakMin:0,cycle:0,nextId:1,lastStage:0,lastDur:0,tasks:[],groups:['仕事','個人'],curTask:null,days:{},settings:{sfx:false,wake:false,pip:true,pipMode:'compact',hero:0,quiet:true,focusMin:25,shortBreak:5,longBreak:15,longEvery:3,sprSet:3}};}
 function xpNeed(lv){return Math.round(30*Math.pow(lv,1.6));}
 function focusHours(st){return Math.floor(st.totalMin/60);}
 function itemById(st,id){if(id==null)return null;return st.inv.find(i=>i.id===id)||null;}
@@ -496,7 +498,7 @@ function applyResult(st,res,now){
   if(s.task!=null){task=taskById(st,s.task);if(task){task.min+=s.durMin;d.tasks[task.id]=(d.tasks[task.id]||0)+s.durMin;}}
   pruneDays(st);
   st.session=null;
-  return {lvFrom,lvTo:st.hero.lv,added,task,built,work:WORK_FOCUS*s.durMin};
+  return {lvFrom,lvTo:st.hero.lv,added,task,built,work:WORK_FOCUS*s.durMin,note:s.note||''};
 }
 function abortSession(st){st.rec.aborts++;st.session=null;}
 function equip(st,id){const it=itemById(st,id);if(!it)return false;st.hero.equip[it.kind]=id;return true;}
@@ -568,6 +570,7 @@ function load(){try{const raw=localStorage.getItem(C.SAVE_KEY);if(raw){const o=J
   // v11で主人公は2人（紫のポニーテール／白髪の着物）。旧セーブは白髪（sprSet=2でhero=3）だけ引き継ぎ、それ以外は紫に寄せる
   if(o.settings&&o.settings.sprSet!==3){o.settings.hero=(o.settings.sprSet===2&&o.settings.hero===3)?1:0;o.settings.sprSet=3;}
   // v18: 旧「鍛錬」（1回+2）を施設の段階（1段+3）に換算して引き継ぐ。換算しきれない余りはゴールドで返す
+  if(o.settings&&o.settings.quiet===undefined)o.settings.quiet=true;
   o.fac=Object.assign({},base.fac,o.fac||{});o.work=o.work&&o.work.jobs?o.work:{jobs:[],at:0};o.unlock=o.unlock||{};o.mat=o.mat||0;
   if(o.up&&(o.up.atk||o.up.def||o.up.hp)){const conv=(n,id,max)=>{const lv=Math.min(max,Math.round(n*2/3));o.fac[id]=Math.max(o.fac[id]||0,lv);let rest=0;for(let i=Math.round(lv*1.5);i<n;i++)rest+=Math.round(40*Math.pow(1.5,i));return rest;};
     let back=conv(o.up.atk||0,'smith',5)+conv(o.up.def||0,'train',5)+conv(o.up.hp||0,'inn',5);o.gold=(o.gold||0)+back;o.up={atk:0,def:0,hp:0};}
@@ -640,6 +643,7 @@ $('#btn-start').onclick=()=>{
   if(st.session)return;
   C.endBreak(st,now());
   C.startSession(st,selStage,selDur,now(),st.curTask);
+  st.session.note=($('#note-in').value||'').trim();$('#note-in').value='';
   simCache=C.simulate(st.session);save();beep(SND.start);
   if(st.settings.pip)pipStart(true);
   if(st.settings.wake)acquireWake();
@@ -652,7 +656,7 @@ function enterFocus(){
   if(!simCache)simCache=C.simulate(s);
   $('#f-stage').textContent=C.stageInfo(s.stage).name+'　'+s.durMin+'分の冒険';
   const t=s.task!=null?C.taskById(st,s.task):null;
-  $('#f-task').textContent=t?'課題：'+t.t:'';
+  $('#f-task').textContent=(t?'課題：'+t.t:'')+(st.session.note?(t?'　':'')+'「'+st.session.note+'」':'');
   show('focus');updateFocus();
   clearInterval(tick);tick=setInterval(updateFocus,1000);
   startAnim();
@@ -664,7 +668,10 @@ function updateFocus(){
   $('#f-timer').textContent=fmt(rem);
   const em=C.elapsedMin(s,t);
   const seen=simCache.events.filter(e=>e.m<em);
+  const quiet=st.settings.quiet!==false;
+  $('#f-hprow').style.display=quiet?'none':'';$('#f-work').style.display=quiet?'none':'';
   const log=$('#f-log');
+  if(quiet){log.className='paper empty';log.textContent='出来事は帰還してからまとめて読めます。';}else
   if(!seen.length){log.className='paper empty';log.textContent=heroDef().nm+'は出発した。最初の出来事は1分後に記録されます。';}
   else{log.className='paper';log.innerHTML=seen.slice(-6).map((e,i,a)=>'<p'+(i===a.length-1?' class="now"':'')+'><span class="m">'+(e.m+1)+'分</span>'+esc(e.text)+'</p>').join('');}
   const hpNow=seen.length?seen[seen.length-1].hp:s.snap.hp;
@@ -751,7 +758,7 @@ function renderResult(res,ap,stage,dur){
   $('#r-lv').innerHTML=(ap.lvTo>ap.lvFrom?'<b class="up">レベルアップ！ Lv.'+ap.lvFrom+' → Lv.'+ap.lvTo+'</b>':'経験値 +'+res.xp)
     +(res.mat?'　建材 +'+res.mat:'')+(ap.work&&st.work.jobs.length+ (ap.built||[]).length?'<div class="sub">工事が '+ap.work+'工程 進んだ</div>':'')
     +(ap.built||[]).map(j=>'<div class="up">'+esc(C.facDef(j.fac).n)+'が'+j.to+'段に完成！</div>').join('');
-  $('#r-task').textContent=ap.task?'課題「'+ap.task.t+'」に '+dur+'分を記録（合計 '+hm(ap.task.min)+'）':'';
+  $('#r-task').textContent=(ap.task?'課題「'+ap.task.t+'」に '+dur+'分を記録（合計 '+hm(ap.task.min)+'）':'')+(ap.note?(ap.task?'　':'')+'今回やること：「'+ap.note+'」':'');
   lastAdded=ap.added;renderLoot();
   $('#r-log').innerHTML=res.events.map(e=>'<p><span class="m">'+(e.m+1)+'分</span>'+esc(e.text)+'</p>').join('');
   $('#r-break').style.display='none';
@@ -927,6 +934,7 @@ function drawChart(cv,p){
 // ---- 設定 ----
 function renderSettings(){
   $('#sw-sfx').classList.toggle('on',!!st.settings.sfx);
+  $('#sw-quiet').classList.toggle('on',st.settings.quiet!==false);
   $('#sw-wake').classList.toggle('on',!!st.settings.wake);
   $('#sw-pip').classList.toggle('on',!!st.settings.pip);$('#sw-pip').disabled=!pipSupported();
   document.querySelectorAll('#pip-mode .chip').forEach(b=>{b.classList.toggle('on',b.dataset.m===(st.settings.pipMode||'compact'));b.disabled=!pipSupported();});
@@ -939,6 +947,7 @@ function renderSettings(){
 }
 document.querySelectorAll('.step').forEach(s=>{const k=s.dataset.k,bs=s.querySelectorAll('button');bs[0].onclick=()=>{C.stepSetting(st,k,-1);if(k==='focusMin')selDur=st.settings.focusMin;save();renderSettings();};bs[1].onclick=()=>{C.stepSetting(st,k,1);if(k==='focusMin')selDur=st.settings.focusMin;save();renderSettings();};});
 $('#sw-sfx').onclick=()=>{st.settings.sfx=!st.settings.sfx;save();renderSettings();beep(SND.item);};
+$('#sw-quiet').onclick=()=>{st.settings.quiet=!(st.settings.quiet!==false);save();renderSettings();};
 $('#sw-wake').onclick=()=>{st.settings.wake=!st.settings.wake;save();renderSettings();};
 $('#sw-pip').onclick=()=>{st.settings.pip=!st.settings.pip;save();renderSettings();};
 document.querySelectorAll('#pip-mode .chip').forEach(b=>b.onclick=async()=>{if(st.settings.pipMode===b.dataset.m)return;st.settings.pipMode=b.dataset.m;save();renderSettings();if(pipOn){pipStop();pipStream=null;await pipStart(true);}});
@@ -1051,7 +1060,7 @@ function drawPip(){
   if(!s){const hk=heroEndKey();drawSprite(ctx,hk.k,48,150,hk.dn?50:96,0,hk.f);if(hk.joy)drawStars(ctx,48,90,7,now());
     ctx.fillStyle='#e0a83a';ctx.font='bold 26px sans-serif';ctx.fillText('帰還しました',205,78);ctx.fillStyle='#eef1f7';ctx.font='14px sans-serif';ctx.fillText('戻って戦利品を確認',205,112);return;}
   const t=now(),rem=C.remainMs(s,t),em=C.elapsedMin(s,t);
-  const seen=simCache?simCache.events.filter(e=>e.m<em):[],last=seen[seen.length-1];
+  const seen=(simCache&&st.settings.quiet===false)?simCache.events.filter(e=>e.m<em):[],last=seen[seen.length-1];// しずか：敵や戦闘を見せない
   // 左：場面
   drawBg(ctx,s.stage,0,0,150,H,121/H);
   const hkf=heroAnimKey(last,seen,t);
@@ -1078,7 +1087,7 @@ function drawPipCompact(){
   if(!s){ctx.fillStyle='#1c2233';ctx.fillRect(0,0,W,H);const hk=heroEndKey();drawSprite(ctx,hk.k,62,H-14,hk.dn?70:150,0,hk.f);if(hk.joy)drawStars(ctx,62,70,11,now());
     ctx.fillStyle='#e0a83a';ctx.font='bold 52px sans-serif';ctx.fillText('帰還しました',292,124);return;}
   const t=now(),rem=C.remainMs(s,t),em=C.elapsedMin(s,t);
-  const seen=simCache?simCache.events.filter(e=>e.m<em):[],last=seen[seen.length-1];
+  const seen=(simCache&&st.settings.quiet===false)?simCache.events.filter(e=>e.m<em):[],last=seen[seen.length-1];// しずか：敵や戦闘を見せない
   // 背景＋文字が読める程度の暗幕
   drawBg(ctx,s.stage,0,0,W,H,0.6);
   ctx.fillStyle='rgba(14,20,36,0.45)';ctx.fillRect(0,0,W,H);
@@ -1101,7 +1110,7 @@ function drawPipCompact(){
   ctx.fillStyle='rgba(30,38,60,0.75)';ctx.fillRect(120,150,W-240,14);ctx.fillStyle='#5fc774';ctx.fillRect(120,150,Math.max(0,(W-240)*hpNow/s.snap.hp),14);
 }
 let animOn=false;
-function startAnim(){animOn=true;const f=()=>{if(!animOn)return;if(!document.hidden&&st.session){const em=C.elapsedMin(st.session,now());const seen=simCache?simCache.events.filter(e=>e.m<em):[];const last=seen[seen.length-1];const en=(last&&last.enemy&&(last.type==='battle'||last.type==='boss'))?Object.assign({stage:st.session.stage},last.enemy):null;drawScene($('#scene'),en,now(),false,heroAnimKey(last,seen,now()));}raf=setTimeout(f,250);};f();}
+function startAnim(){animOn=true;const f=()=>{if(!animOn)return;if(!document.hidden&&st.session){const em=C.elapsedMin(st.session,now());const seen=(simCache&&st.settings.quiet===false)?simCache.events.filter(e=>e.m<em):[];const last=seen[seen.length-1];const en=(last&&last.enemy&&(last.type==='battle'||last.type==='boss'))?Object.assign({stage:st.session.stage},last.enemy):null;drawScene($('#scene'),en,now(),false,heroAnimKey(last,seen,now()));}raf=setTimeout(f,250);};f();}
 function stopAnim(){animOn=false;clearTimeout(raf);}
 
 // ---- ブラウザの「戻る」をアプリ内の移動に振り替える ----
