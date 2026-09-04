@@ -206,7 +206,8 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
   <h1>拠点</h1>
   <div class="sub">ゴールドと建材（宝箱・ボスから。ゴールドでも買えます）で施設を建てます。工事は放置でも少しずつ進み、<b>集中中は30倍の速さ</b>で進みます。</div>
   <div class="card"><div class="row"><span class="grow">所持ゴールド</span><b id="s-gold" style="font-size:20px"></b></div>
-    <div class="row" style="margin-top:4px"><span class="grow">建材</span><b id="s-mat" style="font-size:20px"></b><button class="sm" id="btn-buymat" style="margin-left:8px"></button></div>
+    <div class="row" style="margin-top:4px"><span class="grow">建材</span><b id="s-mat" style="font-size:20px"></b></div>
+    <div class="row" style="margin-top:6px;gap:6px"><span class="sub grow">ゴールドで買う</span><button class="sm" id="btn-buymat1"></button><button class="sm" id="btn-buymat10"></button><button class="sm" id="btn-buymat50"></button></div>
     <div class="row" style="margin-top:4px"><span class="grow">工事枠</span><b id="s-slots"></b></div></div>
   <div class="card" id="s-list"></div>
   <div class="sub">集中の力：集中した合計時間1時間ごとに攻撃+1、防御+1、体力+5が加わります（<span id="s-focus"></span>）。</div>
@@ -253,7 +254,7 @@ details summary{cursor:pointer;color:var(--dim);padding:6px 0}
     ブラウザの制約で、画面を消したりアプリを切り替えたりすると、タイマーの終了通知は届かない場合があります（小窓を出している間は届きやすくなります）。集中時間はスマホの時計で計算しているので、あとから戻ってきても冒険の結果は正しく反映されます。心配な場合はスマホ標準のタイマーも併用してください。
   </div>
   <div class="card"><button class="warn" id="btn-reset" style="width:100%">セーブデータを消す</button></div>
-  <div class="sub center" id="app-ver">集中クエスト v20</div>
+  <div class="sub center" id="app-ver">集中クエスト v21</div>
 </section>
 
 </div>
@@ -534,8 +535,9 @@ const FACS=[
 function facDef(id){return FACS.find(f=>f.id===id);}
 // 工事枠：1枠＋称号「深淵の踏破者」または購入で2枠目＋購入で3枠目。購入はアプリ殻（Kotlin）から ShuchuBridge.unlock() で立てる旗
 function slotCount(st){const u=st.unlock||{};let n=1;if(u.slot2||(st.titlesSeen||[]).includes('d17')||TITLES.find(t=>t.id==='d17').c(st))n++;if(u.slot3)n++;return n;}
-function matPrice(st){return Math.round(80*Math.pow(1.05,st.matBought||0));}
-function buyMat(st){const p=matPrice(st);if(st.gold<p)return false;st.gold-=p;st.mat=(st.mat||0)+1;st.matBought=(st.matBought||0)+1;return true;}
+function matPrice(st){return Math.round(80*Math.pow(1.02,st.matBought||0));}
+function matPriceN(st,n){let t=0;for(let i=0;i<n;i++)t+=Math.round(80*Math.pow(1.02,(st.matBought||0)+i));return t;}
+function buyMat(st,n){n=n||1;const p=matPriceN(st,n);if(st.gold<p)return false;st.gold-=p;st.mat=(st.mat||0)+n;st.matBought=(st.matBought||0)+n;return true;}
 function jobOf(st,id){return (st.work.jobs||[]).find(j=>j.fac===id)||null;}
 function canStart(st,id){const f=facDef(id),lv=st.fac[id]||0;if(!f||lv>=f.max||jobOf(st,id))return {ok:false,why:'不可'};
   if(st.work.jobs.length>=slotCount(st))return {ok:false,why:'工事枠が空いていません'};
@@ -553,7 +555,7 @@ function compareEquip(st,it){const cur=itemById(st,st.hero.equip[it.kind]);retur
 function stepSetting(st,key,dir){const L=LIMITS[key];if(!L)return;const v=(st.settings[key]||L[0])+dir*L[2];st.settings[key]=Math.max(L[0],Math.min(L[1],v));}
 function durationList(st){const l=DURATIONS.slice();const f=st.settings.focusMin||25;if(l.indexOf(f)<0){l.push(f);l.sort((a,b)=>a-b);}return l;}
 
-return {SAVE_KEY,FREE_CANCEL_MIN,DURATIONS,LIMITS,STAGES,DEEP_BOSSES,TITLES,SUBS,SET_BONUS,heroBonus,subDesc,bossOdds,earnedTitles,topTitle,newTitles,RARITY,KIND_LABEL,stageInfo,newState,xpNeed,focusHours,itemById,heroStats,enemyBase,makeEnemy,battle,makeItem,FACS,WORK_FOCUS,facDef,slotCount,matPrice,buyMat,jobOf,canStart,startJob,advanceWork,jobRemain,setBonus,itemMain,itemPrice,itemDesc,startSession,elapsedMin,remainMs,simulate,applyResult,abortSession,equip,unequip,isEquipped,sell,sellWeak,compareEquip,rng,
+return {SAVE_KEY,FREE_CANCEL_MIN,DURATIONS,LIMITS,STAGES,DEEP_BOSSES,TITLES,SUBS,SET_BONUS,heroBonus,subDesc,bossOdds,earnedTitles,topTitle,newTitles,RARITY,KIND_LABEL,stageInfo,newState,xpNeed,focusHours,itemById,heroStats,enemyBase,makeEnemy,battle,makeItem,FACS,WORK_FOCUS,facDef,slotCount,matPrice,matPriceN,buyMat,jobOf,canStart,startJob,advanceWork,jobRemain,setBonus,itemMain,itemPrice,itemDesc,startSession,elapsedMin,remainMs,simulate,applyResult,abortSession,equip,unequip,isEquipped,sell,sellWeak,compareEquip,rng,
   dayKey,dayOf,dayKeys,periodStats,pruneDays,taskAdd,taskById,taskDone,taskUndo,taskDel,groupDel,openTasks,groupMin,nextBreakMin,startBreak,endBreak,stepSetting,durationList};
 })();
 if(typeof module!=='undefined'&&module.exports){module.exports=Core;}
@@ -868,7 +870,7 @@ $('#btn-sellweak').onclick=()=>{const r=C.sellWeak(st);save();if(r.n){beep(SND.c
 function renderShop(){
   const t=now();const built=C.advanceWork(st,t);if(built.length){save();built.forEach(j=>toast(C.facDef(j.fac).n+'が'+j.to+'段に完成！'));}
   $('#s-gold').textContent=st.gold+'G';$('#s-mat').textContent=(st.mat||0)+'個';$('#s-focus').textContent='現在 '+C.focusHours(st)+'時間';
-  {const p=C.matPrice(st);const b=$('#btn-buymat');b.textContent='1つ買う '+p+'G';b.disabled=st.gold<p;b.onclick=()=>{if(C.buyMat(st)){save();beep(SND.coin);renderShop();}};}
+  [1,10,50].forEach(n=>{const p=C.matPriceN(st,n);const b=$('#btn-buymat'+n);b.innerHTML='+'+n+'<br><small>'+p+'G</small>';b.disabled=st.gold<p;b.onclick=()=>{if(C.buyMat(st,n)){save();beep(SND.coin);renderShop();}};});
   const slots=C.slotCount(st);$('#s-slots').textContent=st.work.jobs.length+' / '+slots+(slots<3?'（称号「深淵の踏破者」で2枠目）':'');
   const box=$('#s-list');box.innerHTML='';
   C.FACS.forEach(f=>{const lv=st.fac[f.id]||0,j=C.jobOf(st,f.id);const d=document.createElement('div');d.className='item';
